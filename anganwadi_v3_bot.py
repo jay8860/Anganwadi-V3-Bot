@@ -236,7 +236,7 @@ async def main():
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
-    await app.idle()
+    await app.updater.wait()
 
 if __name__ == "__main__":
     asyncio.run(main())
