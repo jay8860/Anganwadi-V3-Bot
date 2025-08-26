@@ -1,4 +1,3 @@
-# anganwadi_v2_bot.py
 import os
 import asyncio
 import hashlib
@@ -41,63 +40,55 @@ def today_str():
     return datetime.now(tz=IST).strftime("%Y-%m-%d")
 
 def is_allowed_chat(chat_id: int) -> bool:
-    if not ALLOWED_CHAT_IDS:
-        return True
-    return chat_id in ALLOWED_CHAT_IDS
+    return True if not ALLOWED_CHAT_IDS else chat_id in ALLOWED_CHAT_IDS
 
 # ---------- Commands ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
-    if not chat or not is_allowed_chat(chat.id):
-        return
-    await update.message.reply_text("🙏 स्वागत है! कृपया हर दिन अपने आंगनवाड़ी की फ़ोटो इस समूह में भेजें।")
+    if chat and is_allowed_chat(chat.id):
+        await update.message.reply_text("🙏 स्वागत है! कृपया हर दिन अपने आंगनवाड़ी की फ़ोटो इस समूह में भेजें।")
 
 async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
-    if not chat:
-        return
-    await update.message.reply_text(f"chat_id: {chat.id}")
+    if chat:
+        await update.message.reply_text(f"chat_id: {chat.id}")
 
 async def cmd_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
-    if not chat or not is_allowed_chat(chat.id):
-        return
-    count = await context.bot.get_chat_member_count(chat_id=chat.id)
-    await update.message.reply_text(f"👥 Group members right now: {count}")
+    if chat and is_allowed_chat(chat.id):
+        count = await context.bot.get_chat_member_count(chat_id=chat.id)
+        await update.message.reply_text(f"👥 Group members right now: {count}")
 
 async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
-    if not chat or not is_allowed_chat(chat.id):
-        return
-    await post_summary_for_chat(context, chat.id)
-    await asyncio.sleep(1)
-    await post_awards_for_chat(context, chat.id)
+    if chat and is_allowed_chat(chat.id):
+        await post_summary_for_chat(context, chat.id)
+        await asyncio.sleep(1)
+        await post_awards_for_chat(context, chat.id)
 
 async def cmd_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
-    if not chat or not is_allowed_chat(chat.id):
-        return
-    date = today_str()
-    today_ids = set(submissions[chat.id].get(date, {}).keys())
-    member_ids = set(known_users[chat.id].keys())
-    pending_ids = [uid for uid in member_ids if uid not in today_ids]
-    names = [known_users[chat.id].get(uid, f"User {uid}") for uid in pending_ids]
-    if not names:
-        await update.message.reply_text("✅ आज किसी की रिपोर्ट पेंडिंग नहीं है.")
-        return
-    preview = ", ".join(names[:20]) + ("…" if len(names) > 20 else "")
-    await update.message.reply_text(f"⏳ आज पेंडिंग: {len(names)}\n{preview}")
+    if chat and is_allowed_chat(chat.id):
+        date = today_str()
+        today_ids = set(submissions[chat.id].get(date, {}).keys())
+        member_ids = set(known_users[chat.id].keys())
+        pending_ids = [uid for uid in member_ids if uid not in today_ids]
+        names = [known_users[chat.id].get(uid, f"User {uid}") for uid in pending_ids]
+        if not names:
+            await update.message.reply_text("✅ आज किसी की रिपोर्ट पेंडिंग नहीं है.")
+            return
+        preview = ", ".join(names[:20]) + ("…" if len(names) > 20 else "")
+        await update.message.reply_text(f"⏳ आज पेंडिंग: {len(names)}\n{preview}")
 
 # ---------- Membership tracking ----------
 async def track_new_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
     m: ChatMemberUpdated = update.chat_member
     chat_id = m.chat.id
-    if not is_allowed_chat(chat_id):
-        return
-    member = m.new_chat_member
-    if member.status in {"member", "administrator"}:
-        user = member.user
-        known_users[chat_id][user.id] = user.first_name or "User"
+    if is_allowed_chat(chat_id):
+        member = m.new_chat_member
+        if member.status in {"member", "administrator"}:
+            user = member.user
+            known_users[chat_id][user.id] = user.first_name or "User"
 
 # ---------- Photo handling ----------
 media_group_seen = set()
@@ -116,8 +107,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = chat.id
     user_id = user.id
     name = user.first_name or "User"
-
-    # 👇 Ensure known_users is updated BEFORE returns
     known_users[chat_id][user_id] = name
 
     mgid = msg.media_group_id
@@ -134,20 +123,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     submissions[chat_id][date][user_id] = {"name": name, "time": now}
-
     prev_date = last_submission_date[chat_id].get(user_id)
     yesterday = (datetime.now(tz=IST) - timedelta(days=1)).strftime("%Y-%m-%d")
-    if prev_date == yesterday:
-        streaks[chat_id][user_id] = streaks[chat_id].get(user_id, 0) + 1
-    else:
-        streaks[chat_id][user_id] = 1
+    streaks[chat_id][user_id] = streaks[chat_id].get(user_id, 0) + 1 if prev_date == yesterday else 1
     last_submission_date[chat_id][user_id] = date
 
     logging.info(f"[PHOTO] {name} submitted in chat {chat_id} at {now}")
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=f"✅ {name}, आपकी आज की फ़ोटो दर्ज कर ली गई है। बहुत अच्छे!"
-    )
+    await context.bot.send_message(chat_id=chat_id, text=f"✅ {name}, आपकी आज की फ़ोटो दर्ज कर ली गई है। बहुत अच्छे!")
 
 # ---------- Summary & Awards ----------
 async def _build_summary_text(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> str:
@@ -156,12 +138,11 @@ async def _build_summary_text(context: ContextTypes.DEFAULT_TYPE, chat_id: int) 
     today_data = submissions[chat_id].get(date, {})
     today_ids = set(today_data.keys())
     pending_count = max(0, total_members - len(today_ids))
+    tracked_ids = set(known_users[chat_id].keys()) | today_ids
 
-    tracked_ids = set(known_users[chat_id].keys()) | set(today_ids)
     top_streaks = sorted(
         [(uid, streaks[chat_id].get(uid, 0)) for uid in tracked_ids],
-        key=lambda x: x[1],
-        reverse=True
+        key=lambda x: x[1], reverse=True
     )[:5]
 
     leaderboard = "\n".join(
@@ -214,7 +195,7 @@ def schedule_reports(app):
     for cid in ALLOWED_CHAT_IDS:
         for hh, mm in times:
             jq.run_daily(callback=job_summary, time=time(hour=hh, minute=mm, tzinfo=IST), data=cid)
-            jq.run_daily(callback=job_awards, time=time(hour=hh, minute=mm + 2, tzinfo=IST), data=cid)
+            jq.run_daily(callback=job_awards, time=time(hour=hh, minute=mm+2, tzinfo=IST), data=cid)
 
 # ---------- Entrypoint ----------
 async def main():
@@ -233,10 +214,7 @@ async def main():
     schedule_reports(app)
 
     print("Bot online. Waiting for updates...")
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling(drop_pending_updates=True)
-    await app.updater.wait()
+    await app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     asyncio.run(main())
