@@ -1,5 +1,4 @@
 import os
-import asyncio
 import hashlib
 import logging
 from collections import defaultdict
@@ -63,7 +62,6 @@ async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if chat and is_allowed_chat(chat.id):
         await post_summary_for_chat(context, chat.id)
-        await asyncio.sleep(1)
         await post_awards_for_chat(context, chat.id)
 
 async def cmd_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -178,7 +176,6 @@ async def post_awards_for_chat(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
         name = known_users[chat_id].get(uid, f"User {uid}")
         msg = f"{medals[i]} *{name}*, आप आज #{i+1} स्थान पर हैं — {count} दिनों की शानदार रिपोर्टिंग के साथ! 🎉👏"
         await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
-        await asyncio.sleep(0.5)
 
 # ---------- JobQueue ----------
 async def job_summary(context: ContextTypes.DEFAULT_TYPE):
@@ -198,8 +195,9 @@ def schedule_reports(app):
             jq.run_daily(callback=job_awards, time=time(hour=hh, minute=mm+2, tzinfo=IST), data=cid)
 
 # ---------- Entrypoint ----------
-async def main():
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -214,7 +212,4 @@ async def main():
     schedule_reports(app)
 
     print("Bot online. Waiting for updates...")
-    await app.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    app.run_polling(drop_pending_updates=True)
