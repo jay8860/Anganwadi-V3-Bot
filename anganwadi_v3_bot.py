@@ -245,6 +245,12 @@ async def post_awards_for_chat(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
         await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
 
 # ---------- Scheduler ----------
+async def job_summary(context: ContextTypes.DEFAULT_TYPE):
+    await post_summary_for_chat(context, context.job.data)
+
+async def job_awards(context: ContextTypes.DEFAULT_TYPE):
+    await post_awards_for_chat(context, context.job.data)
+
 def schedule_reports(app):
     jq = app.job_queue
     times = [(14, 0), (18, 0)]
@@ -252,7 +258,6 @@ def schedule_reports(app):
         for hh, mm in times:
             jq.run_daily(callback=job_summary, time=time(hour=hh, minute=mm, tzinfo=IST), data=cid)
             jq.run_daily(callback=job_awards, time=time(hour=hh, minute=mm+2, tzinfo=IST), data=cid)
-        # ⏰ Schedule video post at 10:00 AM
         jq.run_daily(callback=job_video_post, time=time(hour=10, minute=0, tzinfo=IST), data=cid)
 
 # ---------- Entry ----------
