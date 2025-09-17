@@ -178,7 +178,7 @@ async def _build_summary_text(context: ContextTypes.DEFAULT_TYPE, chat_id: int) 
     logging.info(f"[REPORT] chat={chat_id}, total={total_members}, sent={len(today_ids)}, pending={pending_count}")
     return (
         f"📊 {datetime.now(tz=IST).strftime('%I:%M %p')} समूह रिपोर्ट:\n\n"
-        f"👥 कुल सदस्य: {total_members}\n"
+        f"👥 कुल Group सदस्य: {total_members}\n"
         f"✅ आज रिपोर्ट भेजी: {len(today_ids)}\n"
         f"⏳ रिपोर्ट नहीं भेजी: {pending_count}\n\n"
         f"🏆 लगातार रिपोर्टिंग करने वाले:\n"
