@@ -234,7 +234,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("report", cmd_report))
     app.add_handler(CommandHandler("pending", cmd_pending))
 
-    app.add_handler(MessageHandler(filters.PHOTO & (filters.ChatType.GROUPS | filters.ChatType.SUPERGROUPS), handle_photo))
+    app.add_handler(MessageHandler(filters.PHOTO & (filters.ChatType.GROUPS | filters.ChatType.SUPERGROUP), handle_photo))
     app.add_handler(ChatMemberHandler(track_new_members, ChatMemberHandler.CHAT_MEMBER))
 
     schedule_reports(app)
