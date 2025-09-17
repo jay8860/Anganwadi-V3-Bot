@@ -1,4 +1,5 @@
 import os
+import json
 import hashlib
 import logging
 from collections import defaultdict
@@ -34,12 +35,37 @@ submissions = defaultdict(lambda: defaultdict(dict))
 streaks = defaultdict(lambda: defaultdict(int))
 last_submission_date = defaultdict(dict)
 known_users = defaultdict(dict)
+media_group_seen = set()
 
 def today_str():
     return datetime.now(tz=IST).strftime("%Y-%m-%d")
 
 def is_allowed_chat(chat_id: int) -> bool:
     return True if not ALLOWED_CHAT_IDS else chat_id in ALLOWED_CHAT_IDS
+
+# ---------- State Persistence ----------
+STATE_FILE = "bot_state.json"
+
+def save_state():
+    with open(STATE_FILE, "w") as f:
+        json.dump({
+            "submissions": submissions,
+            "streaks": streaks,
+            "last_submission_date": last_submission_date,
+            "known_users": known_users
+        }, f, default=dict)
+
+def load_state():
+    global submissions, streaks, last_submission_date, known_users
+    try:
+        with open(STATE_FILE, "r") as f:
+            data = json.load(f)
+            submissions.update({int(k): defaultdict(dict, v) for k, v in data.get("submissions", {}).items()})
+            streaks.update({int(k): defaultdict(int, v) for k, v in data.get("streaks", {}).items()})
+            last_submission_date.update({int(k): v for k, v in data.get("last_submission_date", {}).items()})
+            known_users.update({int(k): v for k, v in data.get("known_users", {}).items()})
+    except Exception as e:
+        print(f"[INFO] No previous state loaded: {e}")
 
 # ---------- Commands ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -78,7 +104,7 @@ async def cmd_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
         preview = ", ".join(names[:20]) + ("…" if len(names) > 20 else "")
         await update.message.reply_text(f"⏳ आज पेंडिंग: {len(names)}\n{preview}")
 
-# ---------- Membership tracking ----------
+# ---------- Membership Tracking ----------
 async def track_new_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
     m: ChatMemberUpdated = update.chat_member
     chat_id = m.chat.id
@@ -87,10 +113,9 @@ async def track_new_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if member.status in {"member", "administrator"}:
             user = member.user
             known_users[chat_id][user.id] = user.first_name or "User"
+            save_state()
 
-# ---------- Photo handling ----------
-media_group_seen = set()
-
+# ---------- Photo Handling ----------
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if not chat or not is_allowed_chat(chat.id):
@@ -109,9 +134,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     mgid = msg.media_group_id
     if mgid:
-        if mgid in media_group_seen:
+        unique_key = f"{chat_id}:{user_id}:{mgid}"
+        if unique_key in media_group_seen:
             return
-        media_group_seen.add(mgid)
+        media_group_seen.add(unique_key)
 
     date = today_str()
     now = datetime.now(tz=IST).strftime("%H:%M")
@@ -126,6 +152,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     streaks[chat_id][user_id] = streaks[chat_id].get(user_id, 0) + 1 if prev_date == yesterday else 1
     last_submission_date[chat_id][user_id] = date
 
+    save_state()
     logging.info(f"[PHOTO] {name} submitted in chat {chat_id} at {now}")
     await context.bot.send_message(chat_id=chat_id, text=f"✅ {name}, आपकी आज की फ़ोटो दर्ज कर ली गई है। बहुत अच्छे!")
 
@@ -186,7 +213,7 @@ async def job_awards(context: ContextTypes.DEFAULT_TYPE):
 
 def schedule_reports(app):
     jq = app.job_queue
-    times = [(10, 0), (14, 0), (18, 0)]
+    times = [(14, 0), (18, 0)]
     if not ALLOWED_CHAT_IDS:
         return
     for cid in ALLOWED_CHAT_IDS:
@@ -197,6 +224,7 @@ def schedule_reports(app):
 # ---------- Entrypoint ----------
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    load_state()
 
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -206,7 +234,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("report", cmd_report))
     app.add_handler(CommandHandler("pending", cmd_pending))
 
-    app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.GROUPS, handle_photo))
+    app.add_handler(MessageHandler(filters.PHOTO & (filters.ChatType.GROUPS | filters.ChatType.SUPERGROUPS), handle_photo))
     app.add_handler(ChatMemberHandler(track_new_members, ChatMemberHandler.CHAT_MEMBER))
 
     schedule_reports(app)
